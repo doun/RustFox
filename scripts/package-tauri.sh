@@ -2,7 +2,7 @@
 # RustFox 打包脚本（Tauri 2 版：macOS / Linux / Windows）
 #
 # 用法:
-#   scripts/package-tauri.sh            # 构建 + 打包当前平台（产物在 frontend/src-tauri/target/release/bundle/）
+#   scripts/package-tauri.sh            # 构建 + 打包当前平台（产物在 target/release/bundle/）
 #
 # 依赖:Node 22+（npm ci）、Rust stable（tauri CLI 经 npm 调用）
 # 产物（bundle 目录）:
@@ -24,6 +24,6 @@ echo "==> 预置 rustfox-mcp 侧载二进制（bundle.externalBin）"
 echo "==> tauri build（含 vite 前端构建 + Rust release 编译 + 平台 bundle）"
 (cd "$FRONTEND" && npm run tauri build)
 
-BUNDLE="$FRONTEND/src-tauri/target/release/bundle"
+BUNDLE="$ROOT/target/release/bundle"
 echo "==> 打包完成，产物目录：$BUNDLE"
 ls -la "$BUNDLE"/* 2>/dev/null || true

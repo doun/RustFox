@@ -24,7 +24,7 @@ npm --prefix frontend run tauri dev
 scripts/package-tauri.sh
 ```
 
-产物在 `frontend/src-tauri/target/release/bundle/`（`.app`/`.dmg`/`.deb`/`.AppImage`/`.msi`/NSIS `.exe` 按平台产出）。
+产物在 `target/release/bundle/`（`.app`/`.dmg`/`.deb`/`.AppImage`/`.msi`/NSIS `.exe` 按平台产出）。
 
 ## 运行
 
