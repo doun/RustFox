@@ -14,7 +14,7 @@ import { ref, watch } from 'vue'
 import { version } from '../../package.json'
 import { useToast } from '../composables/useToast'
 import { useLocaleStore } from '../stores/locale'
-import { takePendingUpdate, skipUpdateVersion } from '../composables/useAutoUpdate'
+import { takePendingUpdate, restorePendingUpdate, skipUpdateVersion } from '../composables/useAutoUpdate'
 import Icon from './ui/Icon.vue'
 import Modal from './ui/Modal.vue'
 import logo from '../assets/rustfox-logo.png'
@@ -56,7 +56,15 @@ let pending: Update | null = null
 watch(
   () => props.open,
   (open) => {
-    if (!open || pendingVersion.value) return
+    if (!open) {
+      // 关闭未安装：放回暂存（小红点重新点亮，下次打开继续承接）
+      if (pendingVersion.value && pending) {
+        restorePendingUpdate(pending)
+        pending = null
+      }
+      return
+    }
+    if (pendingVersion.value) return
     const auto = takePendingUpdate()
     if (auto?.available) {
       pending?.close()
@@ -133,7 +141,7 @@ async function installUpdate(): Promise<void> {
   }
 }
 
-/** 跳过此版本：关闭待安装、记录跳过，不再提醒直到出现更新的版本。 */
+/** 跳过此版本：关闭待安装、记录跳过，不再提醒直到出现更新的版本；同时关闭本弹窗。 */
 function skipVersion(): void {
   const v = pendingVersion.value
   if (!v || downloading.value) return
@@ -143,6 +151,7 @@ function skipVersion(): void {
   pendingNotes.value = ''
   skipUpdateVersion(v)
   toast.success(t('about.skipped', { v }), { message: t('about.skippedHint') })
+  emit('update:open', false)
 }
 </script>
 

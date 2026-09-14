@@ -11,6 +11,7 @@ import { useWorkspaceStore } from '../stores/workspace'
 import { useFoxApi } from '../composables/useFoxApi'
 import { useToast } from '../composables/useToast'
 import { useLocaleStore } from '../stores/locale'
+import { hasPendingUpdate, pendingUpdateVersion } from '../composables/useAutoUpdate'
 import Brand from '../components/Brand.vue'
 import ProjectTabs from '../components/ProjectTabs.vue'
 import EndpointTree from '../components/EndpointTree.vue'
@@ -448,7 +449,16 @@ onBeforeUnmount(() => {
             :title="t('workspace.shortcutsHint')"
             @click="showShortcuts = true"
           />
-          <IconButton class="tb-tool" name="settings" :size="15" :title="t('settings.title')" @click="showSettings = true" />
+          <span class="rf-update-wrap">
+            <IconButton
+              class="tb-tool"
+              name="settings"
+              :size="15"
+              :title="hasPendingUpdate ? t('app.updateFound', { v: pendingUpdateVersion() ?? '' }) : t('settings.title')"
+              @click="showSettings = true"
+            />
+            <span v-if="hasPendingUpdate" class="rf-update-dot" aria-hidden="true" />
+          </span>
         </div>
       </div>
     </div>

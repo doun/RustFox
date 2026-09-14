@@ -6,7 +6,7 @@
  * 监听 macOS 原生菜单「About RustFox」事件以打开自定义关于弹窗。
  */
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import ToastHost from './components/ToastHost.vue'
@@ -15,7 +15,7 @@ import Brand from './components/Brand.vue'
 import AboutDialog from './components/AboutDialog.vue'
 import { useToast } from './composables/useToast'
 import { useLocaleStore } from './stores/locale'
-import { startAutoUpdate } from './composables/useAutoUpdate'
+import { startAutoUpdate, openAboutSignal } from './composables/useAutoUpdate'
 
 const toast = useToast()
 const locale = useLocaleStore()
@@ -30,6 +30,11 @@ const showFloatingBrand = computed(
 const showAbout = ref(false)
 let unlistenAbout: UnlistenFn | null = null
 let stopAutoUpdate: (() => void) | null = null
+
+/** 设置更新行 → 打开关于弹窗（一键下载安装）。 */
+watch(openAboutSignal, () => {
+  showAbout.value = true
+})
 
 onMounted(async () => {
   window.addEventListener('error', (event) => {

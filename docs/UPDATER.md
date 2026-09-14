@@ -49,3 +49,25 @@ npm run tauri -- signer generate -w ~/.tauri/rustfox-updater.key
 发版前同步三处版本：`frontend/package.json`、`frontend/src-tauri/tauri.conf.json`、
 `frontend/src-tauri/Cargo.toml`（`rustfox` 包）。updater 以 `tauri.conf.json` 的
 `version` 为当前版本，与 `latest.json` 里的 `version` 比较（semver 语义）。
+
+## 开发验证（无需改版号/重启）
+
+开发版（`import.meta.env.DEV`）的设置 → 通用页底部有「更新调试」区：
+
+- **模拟新版**：输入版本号（如 `9.9.9`），走与真实检查相同的去重/跳过/通知链
+  （toast + 设置齿轮小红点 + 关于弹窗承接全生效；模拟数据不可安装）；
+- **模拟失败一次**：下一次检查强制失败，验证静默 + 30 分钟重试已安排；
+- **立即检查**：绕过节流与启动延迟，马上跑一次真实检查；
+- **清除锁存**：清空检查节流与提醒记录；下方状态行实时显示各锁存值。
+
+生产包无任何入口调用这些 API（`grep debugSimulateUpdate` 仅命中设置调试区与单测）。
+
+## 客户端提醒策略（`useAutoUpdate`）
+
+- 启动约 8 秒后检查一次，之后每 6 小时轮询；距上次**成功**检查不足 6 小时则跳过
+  （多窗口/频繁重启不重复打扰）；
+- 检查失败不计入节流，30 分钟后重试一次（网络抖动不再静默顺延 6 小时）；
+- 同版本每天最多提醒一次（toast 15 秒，错过第二天可恢复）；跳过的版本保持静默，
+  直到出现更新的版本；
+- 有待安装更新时设置齿轮显示常驻小红点，设置内更新行可直达关于弹窗一键安装；
+  安装/跳过后熄灭。

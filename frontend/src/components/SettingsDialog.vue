@@ -27,6 +27,14 @@ import {
 } from '../composables/useShortcuts'
 import {
   clearSkippedUpdateVersion,
+  clearUpdateLatches,
+  debugFailNextCheck,
+  debugRunCheckNow,
+  debugSimulateUpdate,
+  debugUpdateState,
+  hasPendingUpdate,
+  pendingUpdateVersion,
+  requestOpenAbout,
   skippedUpdateVersion,
 } from '../composables/useAutoUpdate'
 import EnvironmentManager from './EnvironmentManager.vue'
@@ -541,7 +549,74 @@ function reloadSkipped(): void {
 function unskipVersion(): void {
   clearSkippedUpdateVersion()
   skippedVersion.value = null
+  // 取消即“让我再看到它”：清提醒锁存并立即真查一次，结果落定后再反馈+刷新
+  //（远端仍有该版本则 toast + 小红点马上回来；没有则明确告知已是最新）
+  clearUpdateLatches()
   toast.success(t('settings.unskipped'), { message: t('settings.unskippedHint') })
+  void debugRunCheckNow().then((r) => {
+    refreshDebugState()
+    if (r.status === 'none') toast.info(t('settingsdbg.upToDate'))
+    else if (r.status === 'failed') toast.error(t('settingsdbg.checkFailed'), { message: r.message })
+    else if (r.status === 'no-instance') toast.info(t('settingsdbg.noInstance'))
+  })
+}
+
+// ---------- 软件更新：待安装版本 ----------
+/** 有暂存更新时展示版本号（小红点点进来后落到此处一键安装）。 */
+const pendingVersion = computed(() => (hasPendingUpdate.value ? pendingUpdateVersion() : null))
+
+function openUpdateDetail(): void {
+  emit('close')
+  requestOpenAbout()
+}
+
+// ---------- 更新调试（仅开发版可见）：免改版号验证更新链路 ----------
+const showUpdateDebug = import.meta.env.DEV
+const debugVersion = ref('9.9.9')
+const debugStateText = ref('')
+
+function refreshDebugState(): void {
+  const s = debugUpdateState()
+  const fmtTime = (ts: number): string => (ts ? new Date(ts).toLocaleString() : t('settingsdbg.never'))
+  const orNone = (v: string | null): string => v || t('settingsdbg.none')
+  debugStateText.value = t('settingsdbg.stateLine', {
+    last: fmtTime(s.lastCheck),
+    notified: orNone(s.notifiedVersion),
+    at: s.notifiedAt ? new Date(s.notifiedAt).toLocaleString() : t('settingsdbg.none'),
+    skipped: orNone(s.skipped),
+    pending: orNone(s.pending),
+  })
+}
+refreshDebugState()
+
+function debugSimulate(): void {
+  if (!debugSimulateUpdate(debugVersion.value.trim() || '9.9.9')) {
+    toast.info(t('settingsdbg.noInstance'))
+    return
+  }
+  refreshDebugState()
+}
+
+function debugFail(): void {
+  debugFailNextCheck()
+  toast.success(t('settingsdbg.applied'))
+  refreshDebugState()
+}
+
+function debugCheckNow(): void {
+  // 结果落定后再反馈+刷新：无新版/失败不再静默
+  void debugRunCheckNow().then((r) => {
+    refreshDebugState()
+    if (r.status === 'none') toast.info(t('settingsdbg.upToDate'))
+    else if (r.status === 'failed') toast.error(t('settingsdbg.checkFailed'), { message: r.message })
+    else if (r.status === 'no-instance') toast.info(t('settingsdbg.noInstance'))
+  })
+}
+
+function debugClear(): void {
+  clearUpdateLatches()
+  refreshDebugState()
+  toast.success(t('settingsdbg.applied'))
 }
 
 // ---------- 通用派生 ----------
@@ -706,6 +781,19 @@ const projectSummary = computed(() => {
                     </span>
                   </button>
                 </div>
+                <div v-if="pendingVersion" class="mt-5 border-t border-zinc-200/70 dark:border-white/[0.06]">
+                  <div class="flex items-center justify-between gap-4 pt-5">
+                    <div class="max-w-md">
+                      <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        {{ t('app.updateFound', { v: pendingVersion }) }}
+                      </div>
+                      <p class="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">{{ t('settings.updateAvailableDesc') }}</p>
+                    </div>
+                    <button class="rf-btn rf-btn-sm shrink-0" type="button" @click="openUpdateDetail">
+                      {{ t('app.viewDetails') }}
+                    </button>
+                  </div>
+                </div>
                 <div v-if="skippedVersion" class="mt-5 border-t border-zinc-200/70 dark:border-white/[0.06]">
                   <div class="flex items-center justify-between gap-4 pt-5">
                     <div class="max-w-md">
@@ -717,6 +805,33 @@ const projectSummary = computed(() => {
                     <button class="rf-btn rf-btn-sm shrink-0" type="button" @click="unskipVersion">
                       {{ t('settings.unskip') }}
                     </button>
+                  </div>
+                </div>
+                <div v-if="showUpdateDebug" class="mt-5 border-t border-zinc-200/70 dark:border-white/[0.06]">
+                  <div class="pt-5">
+                    <div class="text-sm font-medium text-zinc-900 dark:text-zinc-100">{{ t('settingsdbg.title') }}</div>
+                    <p class="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">{{ t('settingsdbg.desc') }}</p>
+                    <div class="mt-2 flex flex-wrap items-center gap-2">
+                      <input
+                        v-model="debugVersion"
+                        class="rf-input rf-input-sm w-36"
+                        spellcheck="false"
+                        :placeholder="t('settingsdbg.versionPh')"
+                      />
+                      <button class="rf-btn rf-btn-sm" type="button" @click="debugSimulate">
+                        {{ t('settingsdbg.simulate') }}
+                      </button>
+                      <button class="rf-btn rf-btn-sm" type="button" @click="debugFail">
+                        {{ t('settingsdbg.failNext') }}
+                      </button>
+                      <button class="rf-btn rf-btn-sm" type="button" @click="debugCheckNow">
+                        {{ t('settingsdbg.checkNow') }}
+                      </button>
+                      <button class="rf-btn rf-btn-sm" type="button" @click="debugClear">
+                        {{ t('settingsdbg.clear') }}
+                      </button>
+                    </div>
+                    <p class="mt-1.5 font-mono text-[11px] text-zinc-500 dark:text-zinc-400">{{ debugStateText }}</p>
                   </div>
                 </div>
               </div>
