@@ -236,6 +236,18 @@ mod tests {
             .collect()
     }
 
+    /// 序列状态串行锁：自增计数器是进程级全局表，并行测试会互相干扰——
+    /// dump/load 的合并写回可复活刚删的 key（`seq_management_set_list_delete`
+    /// 因此在 CI 偶发失败），裸 `{{$seq}}` 的计数也会被其他测试顶掉。
+    /// 触碰序列状态的测试必须先持锁（中毒时取回继续，避免级联全红）。
+    static SEQ_TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn serial_seq_state() -> std::sync::MutexGuard<'static, ()> {
+        SEQ_TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     #[test]
     fn basic_replace() {
         let v = vars(&[("base_url", "https://api.example.com"), ("id", "10")]);
@@ -275,6 +287,7 @@ mod tests {
 
     #[test]
     fn builtin_seq_global_increments() {
+        let _serial = serial_seq_state();
         let v = VariableMap::new();
         let a: u64 = resolve_variables("{{$seq}}", &v).parse().unwrap();
         let b: u64 = resolve_variables("{{$seq}}", &v).parse().unwrap();
@@ -283,6 +296,7 @@ mod tests {
 
     #[test]
     fn builtin_seq_named_is_independent() {
+        let _serial = serial_seq_state();
         let v = VariableMap::new();
         let key = format!("t{}", Uuid::new_v4().simple());
         let a: u64 = resolve_variables(&format!("{{{{$seq:{key}}}}}"), &v)
@@ -296,6 +310,7 @@ mod tests {
 
     #[test]
     fn builtin_seq_value_is_next_output() {
+        let _serial = serial_seq_state();
         let key = format!("t{}", Uuid::new_v4().simple());
         set_seq_counter(&key, 100);
         let v = VariableMap::new();
@@ -313,6 +328,7 @@ mod tests {
 
     #[test]
     fn seq_management_set_list_delete() {
+        let _serial = serial_seq_state();
         let key = format!("t{}", Uuid::new_v4().simple());
         set_seq_counter(&key, 42);
         let listed = list_seq_counters();
@@ -327,6 +343,7 @@ mod tests {
 
     #[test]
     fn seq_management_dump_load_roundtrip() {
+        let _serial = serial_seq_state();
         let mut map = dump_seq_counters();
         map.insert("roundtrip".to_string(), 7);
         load_seq_counters(map.clone());
@@ -336,6 +353,7 @@ mod tests {
 
     #[test]
     fn builtin_seq_works_with_literal_prefix() {
+        let _serial = serial_seq_state();
         let v = VariableMap::new();
         let out = resolve_variables("aaaa{{$seq}}", &v);
         assert!(out.starts_with("aaaa"));
