@@ -74,7 +74,7 @@ reqwest = { version = "0.12", default-features = false, features = [
     "stream",
     "cookies",
     "multipart",
-    "rustls-tls",
+    "default-tls",
 ] }
 
 webbrowser = "1"
